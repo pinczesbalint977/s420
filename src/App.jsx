@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DesignRequestPage from './pages/DesignRequestPage';
 import AdminPage from './pages/AdminPage';
+import AdminIdeaDetailPage from './pages/AdminIdeaDetailPage';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
 import ImpressumPage from './pages/ImpressumPage';
@@ -32,6 +33,14 @@ function App() {
           element={
             <ProtectedRoute requireAdmin>
               <AdminPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/otlet/:id"
+          element={
+            <ProtectedRoute requireAdmin>
+              <AdminIdeaDetailPage />
             </ProtectedRoute>
           }
         />

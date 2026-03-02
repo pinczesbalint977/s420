@@ -169,10 +169,19 @@ body {
   color: #475569;
 }
 
+.success-note {
+  color: #0f766e;
+  font-weight: 700;
+}
+
 .admin-tabs {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
+}
+
+.admin-tabs-wrap {
+  flex-wrap: wrap;
 }
 
 .tab-btn {
@@ -210,6 +219,222 @@ body {
   gap: 0.75rem;
 }
 
+.idea-form,
+.idea-list {
+  margin-top: 1rem;
+}
+
+.idea-card-list {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.idea-list-card {
+  border: 1px solid #dbe4f0;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.idea-list-main {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.idea-list-side {
+  border-left: 1px solid #e2e8f0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.idea-snippet {
+  margin: 0;
+  color: #475569;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.detail-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-card {
+  border: 1px solid #dbe4f0;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.detail-description p {
+  margin-bottom: 0;
+}
+
+.comment-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: #0f766e;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.idea-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.completion-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.completion-grid .labeled-field:first-child {
+  grid-column: 1 / -1;
+}
+
+.detail-form-stack {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 760px;
+}
+
+.labeled-field {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+
+.labeled-field span {
+  font-weight: 600;
+}
+
+.labeled-field small {
+  color: #64748b;
+}
+
+.labeled-field.compact small {
+  display: none;
+}
+
+.idea-form-grid input,
+.idea-form-grid select,
+.idea-form-grid textarea,
+.idea-filter-grid input,
+.idea-filter-grid select,
+.comment-form select,
+.comment-form textarea,
+.completion-box input,
+.completion-box select,
+.completion-box textarea {
+  padding: 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  width: 100%;
+}
+
+.detail-form-stack input,
+.detail-form-stack select,
+.detail-form-stack textarea {
+  padding: 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  width: 100%;
+}
+
+.compact-select {
+  width: min(260px, 100%) !important;
+}
+
+.idea-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.idea-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.idea-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.idea-section {
+  display: grid;
+  gap: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.75rem;
+}
+
+.comment-box {
+  display: grid;
+  gap: 0.25rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 0.75rem;
+}
+
+.comment-box span {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.comment-box p {
+  margin: 0;
+}
+
+.comment-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.completion-box {
+  background: #fcfffe;
+}
+
+.completion-summary {
+  display: grid;
+  gap: 0.35rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 0.75rem;
+}
+
+.detail-card .btn {
+  margin-top: 0.75rem;
+}
+
+.completion-summary p {
+  margin: 0;
+}
+
+.status-select-label {
+  display: grid;
+  gap: 0.4rem;
+  max-width: 260px;
+}
+
+.status-select-label select {
+  padding: 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
 @media (max-width: 768px) {
   .topbar {
     flex-wrap: wrap;
@@ -217,5 +442,28 @@ body {
 
   .order-controls {
     grid-template-columns: 1fr;
+  }
+
+  .idea-card-head {
+    flex-direction: column;
+  }
+
+  .idea-list-main {
+    grid-template-columns: 1fr;
+  }
+
+  .idea-list-side {
+    border-left: none;
+    border-top: 1px solid #e2e8f0;
+    padding-left: 0;
+    padding-top: 1rem;
+  }
+
+  .completion-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .completion-grid .labeled-field:first-child {
+    grid-column: auto;
   }
 }

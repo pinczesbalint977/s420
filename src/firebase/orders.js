@@ -1,4 +1,15 @@
-﻿import { addDoc, collection, getDocs, orderBy, query, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+﻿import {
+  addDoc,
+  collection,
+  doc,
+  getCountFromServer,
+  getDocs,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where
+} from 'firebase/firestore';
 import { db } from './config';
 
 export async function createOrder(payload) {
@@ -7,6 +18,16 @@ export async function createOrder(payload) {
     createdAt: serverTimestamp(),
     status: 'new'
   });
+}
+
+export async function hasUserPlacedOrder(uid) {
+  if (!uid) {
+    return false;
+  }
+
+  const ordersQuery = query(collection(db, 'orders'), where('uid', '==', uid));
+  const snapshot = await getCountFromServer(ordersQuery);
+  return snapshot.data().count > 0;
 }
 
 export async function listOrders() {
@@ -27,5 +48,18 @@ export async function createDesignRequest(payload) {
     ...payload,
     createdAt: serverTimestamp(),
     status: 'new'
+  });
+}
+
+export async function listDesignRequests() {
+  const q = query(collection(db, 'designRequests'), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function setDesignRequestStatus(requestId, status) {
+  return updateDoc(doc(db, 'designRequests', requestId), {
+    status,
+    updatedAt: serverTimestamp()
   });
 }

@@ -42,8 +42,21 @@ service cloud.firestore {
     }
 
     match /designRequests/{requestId} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow create: if request.resource.data.fullName is string
+        && request.resource.data.email is string
+        && request.resource.data.phone is string
+        && request.resource.data.material is string
+        && request.resource.data.quantity is number
+        && request.resource.data.deadline is string
+        && request.resource.data.city is string
+        && request.resource.data.message is string;
+      allow read, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /adminIdeas/{ideaId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if false;
     }
   }
 }
