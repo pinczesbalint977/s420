@@ -1,0 +1,49 @@
+﻿rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /users/{uid} {
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role;
+      allow delete: if false;
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow create: if request.resource.data.customer.fullName is string
+        && request.resource.data.customer.email is string
+        && request.resource.data.customer.phone is string
+        && request.resource.data.customer.zip is string
+        && request.resource.data.customer.city is string
+        && request.resource.data.customer.address is string
+        && request.resource.data.items is list
+        && request.resource.data.total is number
+        && request.resource.data.legal.termsAcceptedAt is string
+        && request.resource.data.legal.privacyAcceptedAt is string;
+
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /designRequests/{requestId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}
