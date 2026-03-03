@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createAdminIdea, listAdminIdeas } from '../firebase/adminIdeas';
+import { sendNotificationEvent } from '../firebase/notifications';
 import { listDesignRequests, listOrders, setDesignRequestStatus, setOrderStatus } from '../firebase/orders';
 import { createProduct, listProducts, removeProduct } from '../firebase/products';
 import { formatPrice } from '../utils/format';
@@ -176,7 +177,16 @@ function AdminPage() {
     event.preventDefault();
     setSaving(true);
     try {
-      await createAdminIdea({ ...ideaForm, status: 'open' });
+      const ideaRef = await createAdminIdea({ ...ideaForm, status: 'open' });
+      try {
+        await sendNotificationEvent({
+          type: 'admin_idea_created',
+          ideaId: ideaRef.id,
+          ...ideaForm
+        });
+      } catch (notifyError) {
+        console.warn('Admin idea notification failed:', notifyError);
+      }
       setIdeaForm(initialIdeaForm);
       await loadAdminIdeas();
       alert('Ötlet / feladat mentve.');
@@ -388,3 +398,5 @@ function AdminPage() {
 }
 
 export default AdminPage;
+
+

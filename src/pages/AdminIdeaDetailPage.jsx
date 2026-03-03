@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { addAdminIdeaComment, getAdminIdeaById, updateAdminIdea } from '../firebase/adminIdeas';
+import { sendNotificationEvent } from '../firebase/notifications';
 
 const teamMembers = ['Ferenc', 'Bálint', 'Zoltán'];
 
@@ -50,11 +51,24 @@ function AdminIdeaDetailPage() {
       return;
     }
 
+    const commentText = commentDraft.text.trim();
+
     await addAdminIdeaComment(
       idea.id,
-      { authorName: commentDraft.authorName, text: commentDraft.text.trim() },
+      { authorName: commentDraft.authorName, text: commentText },
       idea.comments || []
     );
+    try {
+      await sendNotificationEvent({
+        type: 'admin_idea_comment_created',
+        ideaId: idea.id,
+        ideaTitle: idea.title,
+        authorName: commentDraft.authorName,
+        text: commentText
+      });
+    } catch (notifyError) {
+      console.warn('Admin idea comment notification failed:', notifyError);
+    }
     setCommentDraft((prev) => ({ ...prev, text: '' }));
     await loadIdea();
   }
@@ -85,6 +99,19 @@ function AdminIdeaDetailPage() {
         answeredAt: new Date().toISOString()
       }
     });
+    try {
+      await sendNotificationEvent({
+        type: 'admin_idea_completed',
+        ideaId: idea.id,
+        ideaTitle: idea.title,
+        assigneeName: idea.assigneeName,
+        completionReport: {
+          ...completionDraft
+        }
+      });
+    } catch (notifyError) {
+      console.warn('Admin idea completion notification failed:', notifyError);
+    }
     await loadIdea();
   }
 
@@ -191,3 +218,5 @@ function AdminIdeaDetailPage() {
 }
 
 export default AdminIdeaDetailPage;
+
+

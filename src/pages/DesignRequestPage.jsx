@@ -1,4 +1,5 @@
 ﻿import { useState } from 'react';
+import { sendNotificationEvent } from '../firebase/notifications';
 import { createDesignRequest } from '../firebase/orders';
 
 const initialForm = {
@@ -24,10 +25,23 @@ function DesignRequestPage() {
   async function onSubmit(event) {
     event.preventDefault();
     try {
-      await createDesignRequest({
+      const requestPayload = {
         ...form,
         quantity: Number(form.quantity)
-      });
+      };
+
+      const requestRef = await createDesignRequest(requestPayload);
+
+      try {
+        await sendNotificationEvent({
+          type: 'design_request_created',
+          requestId: requestRef.id,
+          ...requestPayload
+        });
+      } catch (notifyError) {
+        console.warn('Design request notification failed:', notifyError);
+      }
+
       alert('Egyedi ajánlatkérés elküldve.');
       setForm(initialForm);
     } catch (error) {
