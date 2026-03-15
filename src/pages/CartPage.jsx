@@ -7,6 +7,7 @@ function readCart() {
 
 function writeCart(items) {
   localStorage.setItem('cart_items', JSON.stringify(items));
+  window.dispatchEvent(new CustomEvent('cart-updated'));
 }
 
 function CartPage() {
@@ -16,6 +17,12 @@ function CartPage() {
     const updated = readCart()
       .map((item) => (item.id === id ? { ...item, quantity: item.quantity + diff } : item))
       .filter((item) => item.quantity > 0);
+    writeCart(updated);
+    window.location.reload();
+  }
+
+  function removeItem(id) {
+    const updated = readCart().filter((item) => item.id !== id);
     writeCart(updated);
     window.location.reload();
   }
@@ -34,10 +41,19 @@ function CartPage() {
             <p>{formatPrice(item.price)}</p>
           </div>
           <div className="qty-controls">
-            <button onClick={() => changeQty(item.id, -1)}>-</button>
+            <button type="button" className="qty-btn" onClick={() => changeQty(item.id, -1)}>-</button>
             <span>{item.quantity}</span>
-            <button onClick={() => changeQty(item.id, 1)}>+</button>
+            <button type="button" className="qty-btn" onClick={() => changeQty(item.id, 1)}>+</button>
           </div>
+          <button
+            type="button"
+            className="cart-remove-btn"
+            onClick={() => removeItem(item.id)}
+            aria-label="Termék törlése a kosárból"
+            title="Törlés"
+          >
+            🗑
+          </button>
         </article>
       ))}
       <h3>Végösszeg: {formatPrice(total)}</h3>
@@ -51,3 +67,4 @@ function CartPage() {
 }
 
 export default CartPage;
+

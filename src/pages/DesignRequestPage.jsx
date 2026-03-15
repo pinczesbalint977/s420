@@ -42,7 +42,13 @@ function DesignRequestPage() {
         console.warn('Design request notification failed:', notifyError);
       }
 
-      alert('Egyedi ajánlatkérés elküldve.');
+      window.dispatchEvent(
+        new CustomEvent('app-toast', {
+          detail: {
+            message: 'Köszönjük, hogy minket választott. 24 órán belül felvesszük Önnel a kapcsolatot.'
+          }
+        })
+      );
       setForm(initialForm);
     } catch (error) {
       alert(`Hiba: ${error.message}`);
@@ -53,7 +59,7 @@ function DesignRequestPage() {
     <section>
       <h1>Egyedi tervezés kérése</h1>
       <p>Add meg a lehető legtöbb információt, hogy pontos árajánlatot tudjunk adni.</p>
-      <form className="form" onSubmit={onSubmit}>
+      <form className="form design-request-form" onSubmit={onSubmit}>
         <input name="fullName" placeholder="Teljes név" value={form.fullName} onChange={onChange} required />
         <input name="email" type="email" placeholder="E-mail" value={form.email} onChange={onChange} required />
         <input name="phone" placeholder="Telefonszám" value={form.phone} onChange={onChange} required />

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { sendOrderNotification } from '../firebase/notifications';
@@ -9,6 +9,22 @@ function readCart() {
   return JSON.parse(localStorage.getItem('cart_items') || '[]');
 }
 
+const SHIPPING_COSTS = {
+  home: 2800,
+  locker: 1600
+};
+
+function normalizeText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function showToast(message) {
+  window.dispatchEvent(new CustomEvent('app-toast', { detail: { message } }));
+}
+
 function CheckoutPage() {
   const items = readCart();
   const { user } = useAuth();
@@ -16,6 +32,8 @@ function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [checkingDiscount, setCheckingDiscount] = useState(false);
   const [isFirstOrderDiscount, setIsFirstOrderDiscount] = useState(false);
+  const [foxpostPoints, setFoxpostPoints] = useState([]);
+  const [loadingFoxpostPoints, setLoadingFoxpostPoints] = useState(false);
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -23,6 +41,14 @@ function CheckoutPage() {
     zip: '',
     city: '',
     address: '',
+    lockerPoint: '',
+    lockerPointId: '',
+    shippingMethod: 'home',
+    billingName: '',
+    billingZip: '',
+    billingCity: '',
+    billingAddress: '',
+    billingTaxNumber: '',
     acceptTerms: false,
     acceptPrivacy: false
   });
@@ -32,7 +58,24 @@ function CheckoutPage() {
     [items]
   );
   const discountAmount = isFirstOrderDiscount ? Math.round(subtotal * 0.05) : 0;
-  const total = Math.max(subtotal - discountAmount, 0);
+  const totalWithoutShipping = Math.max(subtotal - discountAmount, 0);
+  const shippingCost = items.length > 0 ? SHIPPING_COSTS[form.shippingMethod] : 0;
+  const total = totalWithoutShipping + shippingCost;
+
+  const lockerSuggestions = useMemo(() => {
+    if (form.shippingMethod !== 'locker') return [];
+    const query = normalizeText(form.lockerPoint);
+    if (!query || query.length < 2) return [];
+
+    return foxpostPoints
+      .filter((point) => {
+        const searchText = normalizeText(
+          `${point.city} ${point.zip} ${point.name} ${point.address} ${point.id}`
+        );
+        return searchText.includes(query);
+      })
+      .slice(0, 8);
+  }, [foxpostPoints, form.lockerPoint, form.shippingMethod]);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,44 +89,89 @@ function CheckoutPage() {
       setCheckingDiscount(true);
       try {
         const hasOrders = await hasUserPlacedOrder(user.uid);
-        if (!cancelled) {
-          setIsFirstOrderDiscount(!hasOrders);
-        }
+        if (!cancelled) setIsFirstOrderDiscount(!hasOrders);
       } catch (error) {
         console.error('Discount check failed:', error);
-        if (!cancelled) {
-          setIsFirstOrderDiscount(false);
-        }
+        if (!cancelled) setIsFirstOrderDiscount(false);
       } finally {
-        if (!cancelled) {
-          setCheckingDiscount(false);
-        }
+        if (!cancelled) setCheckingDiscount(false);
       }
     }
 
     checkDiscount();
-
     return () => {
       cancelled = true;
     };
   }, [user?.uid]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFoxpostPoints() {
+      setLoadingFoxpostPoints(true);
+      try {
+        const response = await fetch('https://cdn.foxpost.hu/foxplus.json');
+        const payload = await response.json();
+        const rawItems = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.places)
+            ? payload.places
+            : Array.isArray(payload?.data)
+              ? payload.data
+              : [];
+
+        const mapped = rawItems
+          .map((item) => ({
+            id: item.operator_id || item.place_id || '',
+            name: item.name || '',
+            city: item.city || '',
+            zip: item.zip || '',
+            address: item.address || item.street || ''
+          }))
+          .filter((item) => item.id && item.name);
+
+        if (!cancelled) setFoxpostPoints(mapped);
+      } catch (error) {
+        console.error('Foxpost automata lista betöltése sikertelen:', error);
+        if (!cancelled) setFoxpostPoints([]);
+      } finally {
+        if (!cancelled) setLoadingFoxpostPoints(false);
+      }
+    }
+
+    loadFoxpostPoints();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function onChange(event) {
     const { name, value, type, checked } = event.target;
     setForm((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : value,
+      ...(name === 'lockerPoint' ? { lockerPointId: '' } : null)
+    }));
+  }
+
+  function chooseLocker(point) {
+    setForm((prev) => ({
+      ...prev,
+      lockerPoint: `${point.city} (${point.zip}) - ${point.name}, ${point.address}`.trim(),
+      lockerPointId: point.id
     }));
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
+
     if (items.length === 0) {
-      alert('A kosár üres.');
+      showToast('A kosár üres.');
       return;
     }
+
     if (!form.acceptTerms || !form.acceptPrivacy) {
-      alert('Az ÁSZF és az adatkezelés elfogadása kötelező.');
+      showToast('Az ÁSZF és az adatkezelés elfogadása kötelező.');
       return;
     }
 
@@ -94,16 +182,34 @@ function CheckoutPage() {
         customer: {
           fullName: form.fullName,
           email: form.email,
-          phone: form.phone,
-          zip: form.zip,
-          city: form.city,
-          address: form.address
+          phone: form.phone
+        },
+        shippingAddress: {
+          zip: form.shippingMethod === 'home' ? form.zip : null,
+          city: form.shippingMethod === 'home' ? form.city : null,
+          address: form.shippingMethod === 'home' ? form.address : null
+        },
+        billing: {
+          fullName: form.billingName,
+          zip: form.billingZip,
+          city: form.billingCity,
+          address: form.billingAddress,
+          taxNumber: form.billingTaxNumber || null
+        },
+        shipping: {
+          provider: 'foxpost',
+          method: form.shippingMethod,
+          cost: shippingCost,
+          lockerPoint: form.shippingMethod === 'locker' ? form.lockerPoint : null,
+          lockerPointId: form.shippingMethod === 'locker' ? form.lockerPointId : null
         },
         items,
         pricing: {
           subtotal,
           discountPercent: isFirstOrderDiscount ? 5 : 0,
           discountAmount,
+          totalWithoutShipping,
+          shippingCost,
           total
         },
         total,
@@ -124,11 +230,17 @@ function CheckoutPage() {
         console.warn('Order notification failed:', notifyError);
       }
 
-      localStorage.removeItem('cart_items');
-      alert('Rendelés rögzítve.');
+      localStorage.setItem('cart_items', '[]');
+      window.dispatchEvent(new CustomEvent('cart-updated'));
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent('cart-updated')), 0);
+      showToast('Köszönjük! A rendelésedet rögzítettük.');
       navigate('/');
     } catch (error) {
-      alert(`Hiba: ${error.message}`);
+      if (error?.code === 'permission-denied' || String(error?.message || '').includes('insufficient permissions')) {
+        showToast('Nincs jogosultság a rendelés mentéséhez. Ellenőrizd a Firestore szabályokat.');
+      } else {
+        showToast(`Hiba: ${error.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -139,20 +251,92 @@ function CheckoutPage() {
       <h1>Pénztár</h1>
       <p>Fizetés most: demo módban. Élesben online fizetési szolgáltató szükséges.</p>
       {checkingDiscount && <p>Kedvezmény ellenőrzése...</p>}
-      {user && isFirstOrderDiscount && (
-        <p className="success-note">Első vásárlói kedvezmény aktiválva: 5%.</p>
-      )}
+      {user && isFirstOrderDiscount && <p className="success-note">Első vásárlói kedvezmény aktiválva: 5%.</p>}
       {!user && <p>Első vásárlói 5% kedvezmény regisztrált, bejelentkezett vásárlóknak jár.</p>}
       <h3>Részösszeg: {formatPrice(subtotal)}</h3>
       <h3>Kedvezmény: -{formatPrice(discountAmount)}</h3>
+      <h3>Szállítás ({form.shippingMethod === 'home' ? 'Foxpost házhoz' : 'Foxpost automata'}): {formatPrice(shippingCost)}</h3>
       <h3>Fizetendő: {formatPrice(total)}</h3>
+
       <form onSubmit={handleSubmit} className="form">
-        <input name="fullName" placeholder="Teljes név" value={form.fullName} onChange={onChange} required />
+        <input name="fullName" placeholder="Név" value={form.fullName} onChange={onChange} required />
         <input name="email" type="email" placeholder="E-mail" value={form.email} onChange={onChange} required />
         <input name="phone" placeholder="Telefonszám" value={form.phone} onChange={onChange} required />
-        <input name="zip" placeholder="Irányítószám" value={form.zip} onChange={onChange} required />
-        <input name="city" placeholder="Város" value={form.city} onChange={onChange} required />
-        <input name="address" placeholder="Cím" value={form.address} onChange={onChange} required />
+
+        <fieldset className="checkout-shipping-fieldset">
+          <legend>Szállítási adatok</legend>
+          <label className="checkout-shipping-option">
+            <input
+              type="radio"
+              name="shippingMethod"
+              value="home"
+              checked={form.shippingMethod === 'home'}
+              onChange={onChange}
+            />
+            Házhozszállítás (+{formatPrice(SHIPPING_COSTS.home)})
+          </label>
+          <label className="checkout-shipping-option">
+            <input
+              type="radio"
+              name="shippingMethod"
+              value="locker"
+              checked={form.shippingMethod === 'locker'}
+              onChange={onChange}
+            />
+            Csomagautomata (+{formatPrice(SHIPPING_COSTS.locker)})
+          </label>
+          {form.shippingMethod === 'home' && (
+            <>
+              <input name="zip" placeholder="Irányítószám" value={form.zip} onChange={onChange} required />
+              <input name="city" placeholder="Város" value={form.city} onChange={onChange} required />
+            </>
+          )}
+          {form.shippingMethod === 'home' ? (
+            <input
+              name="address"
+              placeholder="Szállítási cím (utca, házszám)"
+              value={form.address}
+              onChange={onChange}
+              required
+            />
+          ) : (
+            <div className="foxpost-picker">
+              <input
+                name="lockerPoint"
+                placeholder="Kezdd el gépelni pl.: Szentmártonkáta"
+                value={form.lockerPoint}
+                onChange={onChange}
+                autoComplete="off"
+                required
+              />
+              {loadingFoxpostPoints && <small>Foxpost automaták betöltése...</small>}
+              {lockerSuggestions.length > 0 && (
+                <div className="foxpost-suggestions" role="listbox" aria-label="Foxpost automaták">
+                  {lockerSuggestions.map((point) => (
+                    <button
+                      key={point.id}
+                      type="button"
+                      className="foxpost-suggestion-item"
+                      onClick={() => chooseLocker(point)}
+                    >
+                      <strong>{point.city} ({point.zip})</strong> - {point.name}
+                      <span>{point.address}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </fieldset>
+
+        <fieldset className="checkout-shipping-fieldset">
+          <legend>Számlázási adatok</legend>
+          <input name="billingName" placeholder="Számlázási név" value={form.billingName} onChange={onChange} required />
+          <input name="billingZip" placeholder="Számlázási irányítószám" value={form.billingZip} onChange={onChange} required />
+          <input name="billingCity" placeholder="Számlázási város" value={form.billingCity} onChange={onChange} required />
+          <input name="billingAddress" placeholder="Számlázási cím (utca, házszám)" value={form.billingAddress} onChange={onChange} required />
+          <input name="billingTaxNumber" placeholder="Adószám (opcionális, céges számlához)" value={form.billingTaxNumber} onChange={onChange} />
+        </fieldset>
 
         <label>
           <input type="checkbox" name="acceptTerms" checked={form.acceptTerms} onChange={onChange} /> Elfogadom az ÁSZF-et.

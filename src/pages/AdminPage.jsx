@@ -46,6 +46,17 @@ function toDateOnly(value) {
   return '';
 }
 
+function getOrderShippingText(order) {
+  if (order?.shipping?.method === 'locker') {
+    return `Foxpost automata: ${order?.shipping?.lockerPoint || 'Nincs kiválasztva'}`;
+  }
+
+  const zip = order?.shippingAddress?.zip || order?.customer?.zip || '';
+  const city = order?.shippingAddress?.city || order?.customer?.city || '';
+  const address = order?.shippingAddress?.address || order?.customer?.address || '';
+  return [zip, city, address].filter(Boolean).join(' ');
+}
+
 function AdminPage() {
   const [activeTab, setActiveTab] = useState('products');
   const [products, setProducts] = useState([]);
@@ -93,7 +104,20 @@ function AdminPage() {
       const byStatus = orderFilter === 'all' ? true : orderFilter === 'shipped' ? order.status === 'shipped' : order.status !== 'shipped';
       if (!byStatus) return false;
       if (!search) return true;
-      const haystack = [order.id, order.customer?.fullName, order.customer?.email, order.customer?.phone, order.customer?.city, order.customer?.address]
+      const haystack = [
+        order.id,
+        order.customer?.fullName,
+        order.customer?.email,
+        order.customer?.phone,
+        order.shippingAddress?.zip,
+        order.shippingAddress?.city,
+        order.shippingAddress?.address,
+        order.shipping?.lockerPoint,
+        order.billing?.fullName,
+        order.billing?.zip,
+        order.billing?.city,
+        order.billing?.address
+      ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -279,7 +303,13 @@ function AdminPage() {
                 <p><strong>Név:</strong> {order.customer?.fullName}</p>
                 <p><strong>E-mail:</strong> {order.customer?.email}</p>
                 <p><strong>Telefon:</strong> {order.customer?.phone}</p>
-                <p><strong>Cím:</strong> {order.customer?.zip} {order.customer?.city}, {order.customer?.address}</p>
+                <p><strong>Szállítás:</strong> {order.shipping?.method === 'locker' ? 'Foxpost automata' : 'Foxpost házhoz'}</p>
+                <p><strong>Szállítási cím / átvétel:</strong> {getOrderShippingText(order)}</p>
+                <p>
+                  <strong>Számlázási cím:</strong>{' '}
+                  {[order.billing?.zip, order.billing?.city, order.billing?.address].filter(Boolean).join(' ') || 'Nincs megadva'}
+                </p>
+                <p><strong>Számlázási név:</strong> {order.billing?.fullName || order.customer?.fullName || 'Nincs megadva'}</p>
                 <div>
                   <strong>Termékek:</strong>
                   {order.items?.length ? (
