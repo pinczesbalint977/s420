@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { sendOrderNotification } from '../firebase/notifications';
-import { createOrder, hasUserPlacedOrder } from '../firebase/orders';
+import { createBarionPayment, createOrder, hasUserPlacedOrder } from '../firebase/orders';
 import { formatPrice } from '../utils/format';
 
 function readCart() {
@@ -30,6 +30,7 @@ function CheckoutPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [cardLoading, setCardLoading] = useState(false);
   const [checkingDiscount, setCheckingDiscount] = useState(false);
   const [isFirstOrderDiscount, setIsFirstOrderDiscount] = useState(false);
   const [foxpostPoints, setFoxpostPoints] = useState([]);
@@ -162,63 +163,76 @@ function CheckoutPage() {
     }));
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-
+  function validateCommon() {
     if (items.length === 0) {
       showToast('A kosár üres.');
-      return;
+      return false;
     }
 
     if (!form.acceptTerms || !form.acceptPrivacy) {
       showToast('Az ÁSZF és az adatkezelés elfogadása kötelező.');
-      return;
+      return false;
     }
+
+    if (form.shippingMethod === 'locker' && (!form.lockerPoint || !form.lockerPointId)) {
+      showToast('Kérlek válassz Foxpost csomagautomatát a listából.');
+      return false;
+    }
+
+    return true;
+  }
+
+  function buildOrderPayload() {
+    return {
+      uid: user?.uid || null,
+      customer: {
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone
+      },
+      shippingAddress: {
+        zip: form.shippingMethod === 'home' ? form.zip : null,
+        city: form.shippingMethod === 'home' ? form.city : null,
+        address: form.shippingMethod === 'home' ? form.address : null
+      },
+      billing: {
+        fullName: form.billingName,
+        zip: form.billingZip,
+        city: form.billingCity,
+        address: form.billingAddress,
+        taxNumber: form.billingTaxNumber || null
+      },
+      shipping: {
+        provider: 'foxpost',
+        method: form.shippingMethod,
+        cost: shippingCost,
+        lockerPoint: form.shippingMethod === 'locker' ? form.lockerPoint : null,
+        lockerPointId: form.shippingMethod === 'locker' ? form.lockerPointId : null
+      },
+      items,
+      pricing: {
+        subtotal,
+        discountPercent: isFirstOrderDiscount ? 5 : 0,
+        discountAmount,
+        totalWithoutShipping,
+        shippingCost,
+        total
+      },
+      total,
+      legal: {
+        termsAcceptedAt: new Date().toISOString(),
+        privacyAcceptedAt: new Date().toISOString()
+      }
+    };
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!validateCommon()) return;
 
     setLoading(true);
     try {
-      const orderPayload = {
-        uid: user?.uid || null,
-        customer: {
-          fullName: form.fullName,
-          email: form.email,
-          phone: form.phone
-        },
-        shippingAddress: {
-          zip: form.shippingMethod === 'home' ? form.zip : null,
-          city: form.shippingMethod === 'home' ? form.city : null,
-          address: form.shippingMethod === 'home' ? form.address : null
-        },
-        billing: {
-          fullName: form.billingName,
-          zip: form.billingZip,
-          city: form.billingCity,
-          address: form.billingAddress,
-          taxNumber: form.billingTaxNumber || null
-        },
-        shipping: {
-          provider: 'foxpost',
-          method: form.shippingMethod,
-          cost: shippingCost,
-          lockerPoint: form.shippingMethod === 'locker' ? form.lockerPoint : null,
-          lockerPointId: form.shippingMethod === 'locker' ? form.lockerPointId : null
-        },
-        items,
-        pricing: {
-          subtotal,
-          discountPercent: isFirstOrderDiscount ? 5 : 0,
-          discountAmount,
-          totalWithoutShipping,
-          shippingCost,
-          total
-        },
-        total,
-        legal: {
-          termsAcceptedAt: new Date().toISOString(),
-          privacyAcceptedAt: new Date().toISOString()
-        }
-      };
-
+      const orderPayload = buildOrderPayload();
       const orderRef = await createOrder(orderPayload);
 
       try {
@@ -246,10 +260,35 @@ function CheckoutPage() {
     }
   }
 
+  async function handleCardPayment() {
+    if (!validateCommon()) return;
+
+    setCardLoading(true);
+    try {
+      const orderPayload = buildOrderPayload();
+      const result = await createBarionPayment({
+        order: orderPayload,
+        returnUrl: `${window.location.origin}/#/penztar?fizetes=barion`
+      });
+
+      if (!result?.gatewayUrl) {
+        throw new Error('A fizetési átjáró URL hiányzik.');
+      }
+
+      window.location.assign(result.gatewayUrl);
+    } catch (error) {
+      showToast(error?.message || 'A bankkártyás fizetés indítása sikertelen.');
+    } finally {
+      setCardLoading(false);
+    }
+  }
+
   return (
     <section>
       <h1>Pénztár</h1>
-      <p>Fizetés most: demo módban. Élesben online fizetési szolgáltató szükséges.</p>
+      <p>
+        Fizetés módja: rendelés leadása (utánvét/banki átutalás szerint), vagy bankkártyás fizetés Barionnal.
+      </p>
       {checkingDiscount && <p>Kedvezmény ellenőrzése...</p>}
       {user && isFirstOrderDiscount && <p className="success-note">Első vásárlói kedvezmény aktiválva: 5%.</p>}
       {!user && <p>Első vásárlói 5% kedvezmény regisztrált, bejelentkezett vásárlóknak jár.</p>}
@@ -345,13 +384,22 @@ function CheckoutPage() {
           <input type="checkbox" name="acceptPrivacy" checked={form.acceptPrivacy} onChange={onChange} /> Elfogadom az adatkezelési tájékoztatót.
         </label>
 
-        <button className="btn" type="submit" disabled={loading || checkingDiscount}>
-          {loading ? 'Mentés...' : 'Rendelés elküldése'}
-        </button>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button className="btn" type="submit" disabled={loading || checkingDiscount || cardLoading}>
+            {loading ? 'Mentés...' : 'Rendelés elküldése'}
+          </button>
+          <button
+            className="btn"
+            type="button"
+            disabled={cardLoading || loading || checkingDiscount}
+            onClick={handleCardPayment}
+          >
+            {cardLoading ? 'Átirányítás...' : 'Bankkártyás fizetés (Barion)'}
+          </button>
+        </div>
       </form>
     </section>
   );
 }
 
 export default CheckoutPage;
-

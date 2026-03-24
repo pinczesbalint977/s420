@@ -3,6 +3,7 @@
   collection,
   doc,
   getCountFromServer,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -10,7 +11,8 @@
   updateDoc,
   where
 } from 'firebase/firestore';
-import { db } from './config';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from './config';
 
 export async function createOrder(payload) {
   return addDoc(collection(db, 'orders'), {
@@ -62,4 +64,16 @@ export async function setDesignRequestStatus(requestId, status) {
     status,
     updatedAt: serverTimestamp()
   });
+}
+
+export async function createBarionPayment(payload) {
+  const callable = httpsCallable(functions, 'createBarionPayment');
+  const result = await callable(payload);
+  return result.data;
+}
+
+export async function getOrderById(orderId) {
+  const snapshot = await getDoc(doc(db, 'orders', orderId));
+  if (!snapshot.exists()) return null;
+  return { id: snapshot.id, ...snapshot.data() };
 }
